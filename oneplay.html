@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>块块快跑：草原风暴</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --pixel-size: 2px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            background: #1a1a2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Press Start 2P', 'Courier New', monospace;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-user-select: none;
+            user-select: none;
+            cursor: pointer;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        /* 扫描线覆盖层 */
+        .scanlines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            background: repeating-linear-gradient(0deg,
+                    rgba(0, 0, 0, 0.06) 0px,
+                    rgba(0, 0, 0, 0.06) 1px,
+                    rgba(255, 255, 255, 0.02) 1px,
+                    rgba(255, 255, 255, 0.02) 2px);
+            animation: scanlineDrift 0.5s linear infinite;
+        }
+
+        @keyframes scanlineDrift {
+            0% {
+                background-position: 0 0;
+            }
+            100% {
+                background-position: 0 4px;
+            }
+        }
+
+        /* 轻微的CRT色差效果 */
+        .crt-fringe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9;
+            background: radial-gradient(ellipse at center,
+                    rgba(0, 0, 0, 0) 60%,
+                    rgba(0, 0, 0, 0.35) 100%);
+            box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.25);
+        }
+
+        /* 游戏结束弹窗 */
+        #gameOverOverlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 20;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.55);
+            animation: fadeIn 0.3s ease;
+        }
+
+        #gameOverOverlay.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        #gameOverPanel {
+            background: linear-gradient(180deg, #c8956c 0%, #a0724a 15%, #8b5e3c 30%, #7a4f2f 50%, #6b3f22 70%, #5a3018 100%);
+            border: 6px solid #3d1f0a;
+            border-radius: 8px;
+            padding: 28px 32px;
+            text-align: center;
+            box-shadow:
+                0 0 0 3px #5a3018,
+                0 0 0 7px #3d1f0a,
+                0 16px 40px rgba(0, 0, 0, 0.6),
+                inset 0 2px 0 rgba(255, 220, 180, 0.25),
+                inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+            image-rendering: pixelated;
+            position: relative;
+            max-width: 440px;
+            width: 85%;
+        }
+
+        #gameOverPanel::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 10px;
+            right: 10px;
+            height: 2px;
+            background: rgba(255, 200, 150, 0.4);
+            border-radius: 1px;
+        }
+
+        #gameOverPanel::after {
+            content: '';
+            position: absolute;
+            bottom: 8px;
+            left: 10px;
+            right: 10px;
+            height: 2px;
+            background: rgba(0, 0, 0, 0.35);
+            border-radius: 1px;
+        }
+
+        #gameOverPanel h2 {
+            font-family: 'Press Start 2P', 'Courier New', monospace;
+            font-size: clamp(14px, 2.5vw, 18px);
+            color: #ffe0c0;
+            text-shadow:
+                2px 2px 0 #3d1f0a,
+                -1px -1px 0 rgba(255, 255, 255, 0.15);
+            margin-bottom: 18px;
+            letter-spacing: 2px;
+            line-height: 1.6;
+        }
+
+        #gameOverPanel .score-display {
+            font-family: 'Press Start 2P', 'Courier New', monospace;
+            font-size: clamp(11px, 2vw, 14px);
+            color: #ffd700;
+            text-shadow: 1px 1px 0 #3d1f0a;
+            margin: 8px 0;
+            line-height: 1.7;
+        }
+
+        #gameOverPanel .score-display span {
+            color: #ffe8b0;
+            font-size: clamp(13px, 2.3vw, 16px);
+        }
+
+        #gameOverPanel .restart-hint {
+            font-family: 'Press Start 2P', 'Courier New', monospace;
+            font-size: clamp(8px, 1.5vw, 10px);
+            color: #e0c8a0;
+            margin-top: 20px;
+            animation: blinkHint 1s ease-in-out infinite;
+            letter-spacing: 1px;
+        }
+
+        @keyframes blinkHint {
+            0%,
+            100% {
+                opacity: 0.7;
+            }
+            50% {
+                opacity: 1;
+            }
+        }
+
+        #gameOverPanel .heart-icon {
+            display: inline-block;
+            color: #ff4444;
+            font-size: 16px;
+        }
+        #gameOverPanel .heart-icon.orange {
+            color: #ff8c00;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div class="scanlines"></div>
+        <div class="crt-fringe"></div>
+        <div id="gameOverOverlay">
+            <div id="gameOverPanel">
+                <h2>🌾 草原探险结束 🌾</h2>
+                <div class="score-display">最终得分：<span id="finalScore">0</span> 米</div>
+                <div class="score-display">最大生命：<span id="finalMaxLives">3</span> <span id="finalHearts"></span></div>
+                <div class="restart-hint">🖱️ 点击此处重新开始 🖱️</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const container = document.getElementById('gameContainer');
+            const overlay = document.getElementById('gameOverOverlay');
+            const finalScoreEl = document.getElementById('finalScore');
+            const finalMaxLivesEl = document.getElementById('finalMaxLives');
+            const finalHeartsEl = document.getElementById('finalHearts');
+            const restartHint = document.querySelector('.restart-hint');
+
+            // ──────────────────────────────────────
+            // 音频系统（简易）
+            // ──────────────────────────────────────
+            let audioCtx = null;
+
+            function initAudio() {
+                if (!audioCtx) {
+                    try {
+                        audioCtx = new(window.AudioContext || window.webkitAudioContext)();
+                    } catch (e) {
+                        audioCtx = null;
+                    }
+                }
+                if (audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+            }
+
+            function playBeep(freq, duration, type = 'square', vol = 0.08) {
+                if (!audioCtx) return;
+                try {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(audioCtx.currentTime);
+                    osc.stop(audioCtx.currentTime + duration);
+                } catch (e) {
+                    // 静默处理
+                }
+            }
+
+            function sfxJump() { playBeep(280, 0.1, 'square', 0.06);
+                playBeep(420, 0.08, 'square', 0.04, audioCtx?.currentTime + 0.05); }
+
+            function sfxHit() { playBeep(60, 0.25, 'sawtooth', 0.12);
+                playBeep(40, 0.3, 'triangle', 0.08); }
+
+            function sfxPickup() { playBeep(600, 0.06, 'square', 0.05);
+                playBeep(800, 0.06, 'square', 0.04, audioCtx?.currentTime + 0.06);
+                playBeep(1000, 0.08, 'square', 0.03, audioCtx?.currentTime + 0.12); }
+
+            function sfxSuper() { playBeep(200, 0.15, 'sawtooth', 0.1);
+                playBeep(400, 0.1, 'square', 0.08, audioCtx?.currentTime + 0.08);
+                playBeep(600, 0.08, 'square', 0.06, audioCtx?.currentTime + 0.14);
+                playBeep(900, 0.12, 'square', 0.05, audioCtx?.currentTime + 0.2); }
+
+            function sfxBarrel() { playBeep(150, 0.2, 'triangle', 0.07);
+                playBeep(100, 0.18, 'triangle', 0.06, audioCtx?.currentTime + 0.1); }
+
+            function sfxGameOver() { playBeep(100, 0.3, 'sawtooth', 0.1);
+                playBeep(60, 0.4, 'triangle', 0.08, audioCtx?.currentTime + 0.2);
+                playBeep(30, 0.5, 'triangle', 0.06, audioCtx?.currentTime + 0.4); }
+
+            // ──────────────────────────────────────
+            // Canvas 尺寸管理
+            // ──────────────────────────────────────
+            let W, H, groundY, scale;
+
+            function resizeCanvas() {
+                W = window.innerWidth;
+                H = window.innerHeight;
+                canvas.width = W;
+                canvas.height = H;
+                groundY = Math.floor(H * 0.73);
+                scale = Math.max(1, Math.floor(Math.min(W / 800, H / 500)));
+                if (scale < 1) scale = 1;
+                if (scale > 6) scale = 6;
+            }
+
+            resizeCanvas();
+            window.addEventListener('resize', () => {
+                resizeCanvas();
+                if (gameState === 'PLAYING') {
+                    groundY = Math.floor(H * 0.73);
+                    player.y = Math.min(player.y, groundY - player.height);
+                }
+            });
+
+            // ──────────────────────────────────────
+            // 游戏状态
+            // ──────────────────────────────────────
+            const STATE = { PLAYING: 'PLAYING', GAME_OVER: 'GAME_OVER' };
+            let gameState = STATE.PLAYING;
+            let score = 0; // 米数
+            let totalDistance = 0; // 总行进像素距离
+            const PIXELS_PER_METER = 50;
+            let baseSpeed = 280; // 基础速度（像素/秒）
+            let currentSpeed = baseSpeed;
+            let speedMultiplier = 1;
+            let speedEffectTimer = 0;
+            let speedEffectType = null; // 'slow' | 'fast' | 'super'
+            let nextPowerUpMeter = 25;
+            let nextSuperBoxMeter = 500;
+            let screenShakeDuration = 0;
+            let screenShakeIntensity = 0;
+            let shakeOffsetX = 0;
+            let shakeOffsetY = 0;
+            let groundScrollOffset = 0;
+            let frameCount = 0;
+
+            // ──────────────────────────────────────
+            // 玩家
+            // ──────────────────────────────────────
+            const player = {
+                x: 0,
+                y: 0,
+                width: 0,
+                height: 0,
+                pixelSize: 5, // 每个逻辑像素的屏幕像素大小
+                vy: 0,
+                jumpCount: 0,
+                maxJumps: 2,
+                isOnGround: true,
+                lives: 3,
+                maxLives: 3,
+                isHIM: false,
+                himTimer: 0,
+                himDuration: 10, // 秒
+                // 8x10 像素图案 (宽8, 高10)
+                pixelData: null,
+                himPixelData: null,
+            };
+
+            function buildPlayerPixelData() {
+                // 颜色索引:
+                // 0=透明, 1=深棕(头发), 2=浅棕(皮肤), 3=天蓝(衬衫), 4=深蓝(裤子), 5=灰色(鞋), 6=白色, 7=深灰
+                const data = [
+                    // 8列 x 10行，侧面朝向右侧
+                    [0, 1, 1, 1, 1, 0, 0, 0], // 行0: 头发顶部
+                    [1, 1, 2, 1, 1, 0, 0, 0], // 行1: 头发+脸
+                    [1, 2, 2, 2, 1, 0, 0, 0], // 行2: 脸部
+                    [2, 2, 6, 2, 2, 0, 0, 0], // 行3: 眼睛(白)
+                    [0, 3, 3, 3, 3, 3, 0, 0], // 行4: 衬衫
+                    [0, 3, 2, 2, 3, 0, 0, 0], // 行5: 衬衫+手臂
+                    [0, 4, 4, 4, 4, 4, 0, 0], // 行6: 裤子
+                    [0, 4, 0, 4, 0, 4, 0, 0], // 行7: 裤子分开
+                    [0, 5, 5, 5, 5, 5, 0, 0], // 行8: 鞋子
+                    [0, 5, 0, 5, 0, 5, 0, 0], // 行9: 鞋底
+                ];
+                return data;
+            }
+
+            function buildHIMPixelData() {
+                const data = buildPlayerPixelData();
+                // 修改眼睛行为白色发光 (行3, 列2改为亮白)
+                const himData = data.map(row => [...row]);
+                // 行3: 眼睛变成亮白发光
+                himData[3] = [2, 2, 7, 2, 2, 0, 0, 0]; // 亮白眼+暗瞳
+                himData[2] = [1, 2, 7, 2, 1, 0, 0, 0]; // 眼眶加深
+                return himData;
+            }
+
+            player.pixelData = buildPlayerPixelData();
+            player.himPixelData = buildHIMPixelData();
+
+            function resetPlayer() {
+                player.pixelSize = Math.max(3, Math.min(7, Math.floor(scale * 2)));
+                player.width = 8 * player.pixelSize;
+                player.height = 10 * player.pixelSize;
+                player.x = Math.floor(W * 0.15);
+                player.y = groundY - player.height;
+                player.vy = 0;
+                player.jumpCount = 0;
+                player.isOnGround = true;
+                player.lives = 3;
+                player.maxLives = 3;
+                player.isHIM = false;
+                player.himTimer = 0;
+                score = 0;
+                totalDistance = 0;
+                currentSpeed = baseSpeed;
+                speedMultiplier = 1;
+                speedEffectTimer = 0;
+                speedEffectType = null;
+                nextPowerUpMeter = 25;
+                nextSuperBoxMeter = 500;
+                screenShakeDuration = 0;
+                groundScrollOffset = 0;
+                obstacles.length = 0;
+                powerUps.length = 0;
+                superBoxes.length = 0;
+                particles.length = 0;
+                frameCount = 0;
+            }
+
+            // ──────────────────────────────────────
+            // 障碍物、道具、超级箱子
+            // ──────────────────────────────────────
+            let obstacles = [];
+            let powerUps = [];
+            let superBoxes = [];
+            let particles = [];
+            let obstacleSpawnTimer = 0;
+            let obstacleSpawnInterval = 380; // 像素间距
+
+            function spawnObstacle() {
+                const type = Math.random() < 0.55 ? 'cactus' : 'barrel';
+                const w = type === 'cactus' ? player.pixelSize * 5 : player.pixelSize * 7;
+                const h = type === 'cactus' ? player.pixelSize * 9 : player.pixelSize * 6;
+                obstacles.push({
+                    type: type,
+                    x: W + 40,
+                    y: groundY - h,
+                    width: w,
+                    height: h,
+                    active: true,
+                });
+            }
+
+            function spawnPowerUp() {
+                const type = Math.random() < 0.5 ? 'phone' : 'syringe';
+                const w = player.pixelSize * 5;
+                const h = player.pixelSize * 5;
+                powerUps.push({
+                    type: type,
+                    x: W + 30,
+                    y: groundY - h - player.pixelSize * 2,
+                    width: w,
+                    height: h,
+                    active: true,
+                });
+            }
+
+            function spawnSuperBox() {
+                const w = player.pixelSize * 7;
+                const h = player.pixelSize * 6;
+                superBoxes.push({
+                    x: W + 50,
+                    y: groundY - h - player.pixelSize * 1,
+                    width: w,
+                    height: h,
+                    active: true,
+                    glowPhase: 0,
+                });
+            }
+
+            // ──────────────────────────────────────
+            // 粒子系统
+            // ──────────────────────────────────────
+            function spawnParticles(x, y, count, color, spread = 3, life = 0.5) {
+                for (let i = 0; i < count; i++) {
+                    particles.push({
+                        x: x,
+                        y: y,
+                        vx: (Math.random() - 0.5) * spread * 60,
+                        vy: (Math.random() - 0.8) * spread * 80,
+                        life: life + Math.random() * 0.3,
+                        maxLife: life + 0.3,
+                        color: color,
+                        size: 2 + Math.random() * 3,
+                    });
+                }
+            }
+
+            // ──────────────────────────────────────
+            // 输入处理
+            // ──────────────────────────────────────
+            function handleJump() {
+                initAudio();
+                if (gameState === STATE.GAME_OVER) {
+                    restartGame();
+                    return;
+                }
+                if (player.jumpCount < player.maxJumps) {
+                    const jumpStrength = player.jumpCount === 0 ? -520 : -400;
+                    player.vy = jumpStrength;
+                    player.jumpCount++;
+                    player.isOnGround = false;
+                    sfxJump();
+                    // 二段跳粒子
+                    if (player.jumpCount === 2) {
+                        spawnParticles(player.x + player.width / 2, player.y + player.height,
+                            6, '#ffffff', 2, 0.35);
+                    }
+                }
+            }
+
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+                    e.preventDefault();
+                    handleJump();
+                }
+            });
+
+            canvas.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                handleJump();
+            });
+
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                handleJump();
+            }, { passive: false });
+
+            overlay.addEventListener('click', (e) => {
+                if (gameState === STATE.GAME_OVER) {
+                    e.stopPropagation();
+                    restartGame();
+                }
+            });
+
+            overlay.addEventListener('pointerdown', (e) => {
+                if (gameState === STATE.GAME_OVER) {
+                    e.stopPropagation();
+                    restartGame();
+                }
+            });
+
+            function restartGame() {
+                initAudio();
+                resetPlayer();
+                resizeCanvas();
+                player.pixelSize = Math.max(3, Math.min(7, Math.floor(scale * 2)));
+                player.width = 8 * player.pixelSize;
+                player.height = 10 * player.pixelSize;
+                player.x = Math.floor(W * 0.15);
+                player.y = groundY - player.height;
+                player.lives = 3;
+                player.maxLives = 3;
+                player.isHIM = false;
+                player.himTimer = 0;
+                gameState = STATE.PLAYING;
+                overlay.classList.remove('active');
+                obstacleSpawnTimer = 0;
+                obstacles = [];
+                powerUps = [];
+                superBoxes = [];
+                particles = [];
+                score = 0;
+                totalDistance = 0;
+                currentSpeed = baseSpeed;
+                speedMultiplier = 1;
+                speedEffectTimer = 0;
+                speedEffectType = null;
+                nextPowerUpMeter = 25;
+                nextSuperBoxMeter = 500;
+                screenShakeDuration = 0;
+                groundScrollOffset = 0;
+                frameCount = 0;
+            }
+
+            // ──────────────────────────────────────
+            // 碰撞检测
+            // ──────────────────────────────────────
+            function rectsCollide(a, b) {
+                const margin = player.pixelSize * 0.6;
+                return (
+                    a.x + margin < b.x + b.width - margin &&
+                    a.x + a.width - margin > b.x + margin &&
+                    a.y + margin < b.y + b.height - margin &&
+                    a.y + a.height - margin > b.y + margin
+                );
+            }
+
+            // ──────────────────────────────────────
+            // 触发屏幕震动
+            // ──────────────────────────────────────
+            function triggerShake(intensity, duration) {
+                screenShakeIntensity = Math.max(screenShakeIntensity, intensity);
+                screenShakeDuration = Math.max(screenShakeDuration, duration);
+            }
+
+            // ──────────────────────────────────────
+            // 应用木桶效果
+            // ──────────────────────────────────────
+            function applyBarrelEffect() {
+                const isSlow = Math.random() < 0.5;
+                if (isSlow) {
+                    speedMultiplier = 0.2; // 5倍减速
+                    speedEffectType = 'slow';
+                } else {
+                    speedMultiplier = 10; // 10倍加速
+                    speedEffectType = 'fast';
+                }
+                speedEffectTimer = 5; // 5秒
+                currentSpeed = baseSpeed * speedMultiplier;
+                sfxBarrel();
+                spawnParticles(player.x + player.width / 2, player.y + player.height / 2,
+                    12, isSlow ? '#88ccff' : '#ffaa00', 4, 0.6);
+            }
+
+            function applySuperBoost() {
+                speedMultiplier = 100;
+                speedEffectType = 'super';
+                speedEffectTimer = 3.5; // 3.5秒超级加速
+                currentSpeed = baseSpeed * speedMultiplier;
+                score += 1000;
+                sfxSuper();
+                spawnParticles(player.x + player.width / 2, player.y + player.height / 2,
+                    30, '#ffd700', 8, 1.0);
+                triggerShake(8, 0.5);
+            }
+
+            // ──────────────────────────────────────
+            // 游戏更新
+            // ──────────────────────────────────────
+            function update(dt) {
+                if (gameState !== STATE.PLAYING) return;
+
+                // 限制最大deltaTime防止跳帧问题
+                const cappedDt = Math.min(dt, 0.1);
+                frameCount++;
+
+                // 速度效果计时器
+                if (speedEffectTimer > 0) {
+                    speedEffectTimer -= cappedDt;
+                    if (speedEffectTimer <= 0) {
+                        speedEffectTimer = 0;
+                        speedMultiplier = 1;
+                        speedEffectType = null;
+                        currentSpeed = baseSpeed;
+                    }
+                }
+
+                // 更新当前速度
+                currentSpeed = baseSpeed * speedMultiplier;
+
+                // 行进距离
+                const distanceThisFrame = currentSpeed * cappedDt;
+                totalDistance += distanceThisFrame;
+                score = Math.floor(totalDistance / PIXELS_PER_METER);
+                groundScrollOffset += distanceThisFrame;
+
+                // 更新玩家物理
+                const gravity = 1400;
+                if (!player.isOnGround) {
+                    player.vy += gravity * cappedDt;
+                    player.y += player.vy * cappedDt;
+                    if (player.y >= groundY - player.height) {
+                        player.y = groundY - player.height;
+                        player.vy = 0;
+                        player.isOnGround = true;
+                        player.jumpCount = 0;
+                    }
+                }
+
+                // HIM计时器
+                if (player.isHIM) {
+                    player.himTimer -= cappedDt;
+                    if (player.himTimer <= 0) {
+                        player.isHIM = false;
+                        player.himTimer = 0;
+                        spawnParticles(player.x + player.width / 2, player.y + player.height / 2,
+                            15, '#ffffff', 3, 0.5);
+                    }
+                }
+
+                // 更新障碍物
+                for (let obs of obstacles) {
+                    obs.x -= currentSpeed * cappedDt;
+                }
+                // 移除屏幕外的障碍物
+                obstacles = obstacles.filter(obs => obs.x + obs.width > -60);
+
+                // 更新道具
+                for (let pu of powerUps) {
+                    pu.x -= currentSpeed * cappedDt;
+                }
+                powerUps = powerUps.filter(pu => pu.x + pu.width > -60);
+
+                // 更新超级箱子
+                for (let sb of superBoxes) {
+                    sb.x -= currentSpeed * cappedDt;
+                    sb.glowPhase += cappedDt * 6;
+                }
+                superBoxes = superBoxes.filter(sb => sb.x + sb.width > -60);
+
+                // 更新粒子
+                for (let p of particles) {
+                    p.x += p.vx * cappedDt;
+                    p.y += p.vy * cappedDt;
+                    p.vy += 200 * cappedDt;
+                    p.life -= cappedDt;
+                }
+                particles = particles.filter(p => p.life > 0);
+
+                // 生成障碍物
+                obstacleSpawnTimer += distanceThisFrame;
+                const dynamicInterval = obstacleSpawnInterval + Math.random() * 250 - 80;
+                if (obstacleSpawnTimer >= dynamicInterval) {
+                    obstacleSpawnTimer = 0;
+                    obstacleSpawnInterval = 300 + Math.random() * 350;
+                    spawnObstacle();
+                }
+
+                // 检查是否需要生成道具（每25米）
+                if (score >= nextPowerUpMeter && powerUps.length === 0) {
+                    spawnPowerUp();
+                    nextPowerUpMeter += 25;
+                }
+
+                // 检查是否需要生成超级箱子（每500米）
+                if (score >= nextSuperBoxMeter && superBoxes.length === 0) {
+                    spawnSuperBox();
+                    nextSuperBoxMeter += 500;
+                }
+
+                // 碰撞检测 - 障碍物
+                const playerRect = {
+                    x: player.x,
+                    y: player.y,
+                    width: player.width,
+                    height: player.height,
+                };
+
+                for (let obs of obstacles) {
+                    if (!obs.active) continue;
+                    if (rectsCollide(playerRect, obs)) {
+                        obs.active = false;
+                        if (player.isHIM) {
+                            // HIM模式下无敌，障碍物被摧毁
+                            spawnParticles(obs.x + obs.width / 2, obs.y + obs.height / 2,
+                                20, '#ffffff', 5, 0.7);
+                            playBeep(800, 0.05, 'square', 0.04);
+                            continue;
+                        }
+                        if (obs.type === 'cactus') {
+                            // 扣血
+                            player.lives--;
+                            triggerShake(14, 0.4);
+                            sfxHit();
+                            spawnParticles(player.x + player.width / 2, player.y + player.height / 2,
+                                20, '#ff3333', 6, 0.7);
+                            if (player.lives <= 0) {
+                                endGame();
+                                return;
+                            }
+                        } else if (obs.type === 'barrel') {
+                            // 触发速度效果
+                            applyBarrelEffect();
+                            triggerShake(6, 0.25);
+                            spawnParticles(obs.x + obs.width / 2, obs.y + obs.height / 2,
+                                15, '#cc8844', 4, 0.5);
+                        }
+                    }
+                }
+
+                // 碰撞检测 - 道具
+                for (let pu of powerUps) {
+                    if (!pu.active) continue;
+                    if (rectsCollide(playerRect, pu)) {
+                        pu.active = false;
+                        if (pu.type === 'phone') {
+                            // 变为HIM形态
+                            player.isHIM = true;
+                            player.himTimer = player.himDuration;
+                            sfxPickup();
+                            spawnParticles(pu.x + pu.width / 2, pu.y + pu.height / 2,
+                                25, '#ffffff', 6, 1.0);
+                            playBeep(500, 0.08, 'square', 0.06);
+                        } else if (pu.type === 'syringe') {
+                            // 回血
+                            if (player.isHIM && player.lives >= player.maxLives && player.maxLives < 5) {
+                                player.maxLives++;
+                                player.lives = player.maxLives;
+                                spawnParticles(pu.x + pu.width / 2, pu.y + pu.height / 2,
+                                    20, '#ff8c00', 5, 0.8);
+                                playBeep(700, 0.06, 'square', 0.05);
+                            } else if (player.lives < player.maxLives) {
+                                player.lives++;
+                                spawnParticles(pu.x + pu.width / 2, pu.y + pu.height / 2,
+                                    15, '#ff6666', 4, 0.6);
+                                playBeep(650, 0.06, 'square', 0.05);
+                            }
+                            sfxPickup();
+                        }
+                    }
+                }
+
+                // 碰撞检测 - 超级箱子
+                for (let sb of superBoxes) {
+                    if (!sb.active) continue;
+                    if (rectsCollide(playerRect, sb)) {
+                        sb.active = false;
+                        applySuperBoost();
+                        spawnParticles(sb.x + sb.width / 2, sb.y + sb.height / 2,
+                            40, '#ffd700', 10, 1.2);
+                    }
+                }
+
+                // 更新屏幕震动
+                if (screenShakeDuration > 0) {
+                    screenShakeDuration -= cappedDt;
+                    shakeOffsetX = (Math.random() - 0.5) * screenShakeIntensity * 2;
+                    shakeOffsetY = (Math.random() - 0.5) * screenShakeIntensity * 2;
+                    if (screenShakeDuration <= 0) {
+                        shakeOffsetX = 0;
+                        shakeOffsetY = 0;
+                        screenShakeIntensity = 0;
+                    }
+                } else {
+                    shakeOffsetX = 0;
+                    shakeOffsetY = 0;
+                }
+
+                // 确保玩家在地面上（如果应该在地面上）
+                if (player.isOnGround && player.y < groundY - player.height) {
+                    player.y = groundY - player.height;
+                }
+            }
+
+            function endGame() {
+                gameState = STATE.GAME_OVER;
+                sfxGameOver();
+                finalScoreEl.textContent = score;
+                finalMaxLivesEl.textContent = player.maxLives;
+                let heartsHTML = '';
+                for (let i = 0; i < player.maxLives; i++) {
+                    const cls = i >= 3 ? 'orange' : '';
+                    heartsHTML += `<span class="heart-icon ${cls}">❤</span> `;
+                }
+                finalHeartsEl.innerHTML = heartsHTML;
+                overlay.classList.add('active');
+                triggerShake(20, 0.6);
+            }
+
+            // ──────────────────────────────────────
+            // 渲染
+            // ──────────────────────────────────────
+            function drawPixelArt(x, y, pixelData, pixelSize, alpha = 1) {
+                const colorMap = {
+                    0: null, // 透明
+                    1: '#5c3a1e', // 深棕-头发
+                    2: '#d4a574', // 浅棕-皮肤
+                    3: '#5b9bd5', // 天蓝-衬衫
+                    4: '#2c3e6b', // 深蓝-裤子
+                    5: '#555555', // 灰色-鞋子
+                    6: '#f0f0f0', // 白色-眼白
+                    7: '#1a1a1a', // 深色-瞳孔
+                };
+                const himColorMap = {
+                    ...colorMap,
+                    6: '#ffffff', // HIM亮白眼
+                    7: '#ff4444', // HIM红瞳
+                    2: '#c8b89a', // HIM略苍白皮肤
+                };
+                const cmap = player.isHIM ? himColorMap : colorMap;
+
+                ctx.save();
+                if (alpha < 1) {
+                    ctx.globalAlpha = alpha;
+                }
+                for (let row = 0; row < pixelData.length; row++) {
+                    for (let col = 0; col < pixelData[row].length; col++) {
+                        const colorIdx = pixelData[row][col];
+                        const color = cmap[colorIdx];
+                        if (color === null) continue;
+                        ctx.fillStyle = color;
+                        ctx.fillRect(
+                            Math.floor(x + col * pixelSize),
+                            Math.floor(y + row * pixelSize),
+                            pixelSize,
+                            pixelSize
+                        );
+                    }
+                }
+                ctx.restore();
+
+                // HIM发光眼睛效果
+                if (player.isHIM && pixelData === player.himPixelData) {
+                    ctx.save();
+                    ctx.globalAlpha = 0.5 + Math.sin(frameCount * 0.3) * 0.3;
+                    const eyeX = x + 2 * pixelSize;
+                    const eyeY = y + 3 * pixelSize;
+                    const glowGrad = ctx.createRadialGradient(
+                        eyeX + pixelSize / 2, eyeY + pixelSize / 2, pixelSize * 0.3,
+                        eyeX + pixelSize / 2, eyeY + pixelSize / 2, pixelSize * 3
+                    );
+                    glowGrad.addColorStop(0, 'rgba(255,255,255,0.9)');
+                    glowGrad.addColorStop(1, 'rgba(255,255,255,0)');
+                    ctx.fillStyle = glowGrad;
+                    ctx.fillRect(eyeX - pixelSize * 2, eyeY - pixelSize * 2, pixelSize * 6, pixelSize * 6);
+                    ctx.restore();
+                }
+            }
+
+            function drawCactus(x, y, w, h) {
+                const ps = player.pixelSize;
+                // 主体深绿色
+                ctx.fillStyle = '#3d7a2f';
+                ctx.fillRect(x + ps, y, w - ps * 2, h);
+                // 左侧臂
+                ctx.fillStyle = '#4a8f3a';
+                ctx.fillRect(x, y + ps * 2, ps * 2, h - ps * 4);
+                // 右侧臂
+                ctx.fillRect(x + w - ps * 2, y + ps * 3, ps * 2, h - ps * 5);
+                // 纹理线
+                ctx.fillStyle = '#2d5a1f';
+                for (let iy = y + ps * 2; iy < y + h - ps; iy += ps * 2) {
+                    ctx.fillRect(x + ps * 1.5, iy, w - ps * 3, ps * 0.5);
+                }
+                // 刺
+                ctx.fillStyle = '#8bc78a';
+                const spinePositions = [
+                    [x + ps * 1.5, y + ps * 1.5],
+                    [x + w - ps * 1.5, y + ps * 2.5],
+                    [x + ps * 1.5, y + h - ps * 2],
+                ];
+                for (let [sx, sy] of spinePositions) {
+                    ctx.fillRect(sx - ps * 0.3, sy - ps * 0.3, ps * 0.8, ps * 0.8);
+                }
+            }
+
+            function drawBarrel(x, y, w, h) {
+                const ps = player.pixelSize;
+                // 桶身
+                const barrelGrad = ctx.createLinearGradient(x, y, x + w, y);
+                barrelGrad.addColorStop(0, '#8b5e3c');
+                barrelGrad.addColorStop(0.3, '#c89460');
+                barrelGrad.addColorStop(0.5, '#d4a470');
+                barrelGrad.addColorStop(0.7, '#c89460');
+                barrelGrad.addColorStop(1, '#6b3f22');
+                ctx.fillStyle = barrelGrad;
+                ctx.fillRect(x + ps * 0.5, y + ps, w - ps, h - ps);
+                // 顶部和底部边框
+                ctx.fillStyle = '#5a3018';
+                ctx.fillRect(x, y, w, ps * 1.2);
+                ctx.fillRect(x, y + h - ps * 1.2, w, ps * 1.2);
+                // 金属环
+                ctx.fillStyle = '#888888';
+                ctx.fillRect(x + ps * 0.3, y + ps * 1.2, w - ps * 0.6, ps * 0.5);
+                ctx.fillRect(x + ps * 0.3, y + h - ps * 1.7, w - ps * 0.6, ps * 0.5);
+                // 竖条纹
+                ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                for (let ix = x + ps * 2; ix < x + w - ps; ix += ps * 2) {
+                    ctx.fillRect(ix, y + ps * 1.5, ps * 0.6, h - ps * 3);
+                }
+            }
+
+            function drawPhone(x, y, w, h) {
+                const ps = player.pixelSize;
+                // 手机主体
+                ctx.fillStyle = '#333333';
+                ctx.fillRect(x, y, w, h);
+                // 屏幕
+                ctx.fillStyle = '#44cc88';
+                ctx.fillRect(x + ps * 0.8, y + ps * 0.8, w - ps * 1.6, h - ps * 2.5);
+                // 屏幕亮点
+                ctx.fillStyle = '#88ffcc';
+                ctx.fillRect(x + ps * 1, y + ps * 1, w - ps * 2, ps * 1.2);
+                // 按钮
+                ctx.fillStyle = '#666666';
+                ctx.fillRect(x + w - ps * 1.5, y + h * 0.35, ps * 1, ps * 1.5);
+                // 天线小点
+                ctx.fillStyle = '#ffcc00';
+                ctx.fillRect(x + w * 0.4, y - ps * 0.6, ps * 1.5, ps * 0.8);
+            }
+
+            function drawSyringe(x, y, w, h) {
+                const ps = player.pixelSize;
+                // 针筒主体
+                ctx.fillStyle = '#e8e8e8';
+                ctx.fillRect(x + ps, y + ps * 1.5, w - ps * 2, h - ps * 2);
+                // 液体
+                ctx.fillStyle = '#ff6688';
+                ctx.fillRect(x + ps * 1.2, y + ps * 2, w - ps * 2.4, h - ps * 3.5);
+                // 推杆
+                ctx.fillStyle = '#cccccc';
+                ctx.fillRect(x + w * 0.35, y - ps * 1.5, ps * 1.8, ps * 3);
+                // 针头
+                ctx.fillStyle = '#aaaaaa';
+                ctx.fillRect(x + w * 0.4, y + h - ps * 0.5, ps * 1.5, ps * 2);
+                // 刻度线
+                ctx.fillStyle = '#333333';
+                for (let iy = y + ps * 2.5; iy < y + h - ps * 3; iy += ps * 1.5) {
+                    ctx.fillRect(x + w * 0.25, iy, w * 0.5, ps * 0.3);
+                }
+            }
+
+            function drawSuperBox(x, y, w, h, glowPhase) {
+                const ps = player.pixelSize;
+                // 发光效果
+                const glowAlpha = 0.35 + Math.sin(glowPhase) * 0.2;
+                ctx.save();
+                ctx.globalAlpha = glowAlpha;
+                const glowGrad = ctx.createRadialGradient(x + w / 2, y + h / 2, w * 0.3, x + w / 2, y + h / 2, w * 1.5);
+                glowGrad.addColorStop(0, '#ffd700');
+                glowGrad.addColorStop(1, 'rgba(255,200,0,0)');
+                ctx.fillStyle = glowGrad;
+                ctx.fillRect(x - w, y - h * 0.5, w * 3, h * 2);
+                ctx.restore();
+                // 箱子主体
+                const boxGrad = ctx.createLinearGradient(x, y, x, y + h);
+                boxGrad.addColorStop(0, '#ffd700');
+                boxGrad.addColorStop(0.4, '#ffb800');
+                boxGrad.addColorStop(0.6, '#e8a400');
+                boxGrad.addColorStop(1, '#c88800');
+                ctx.fillStyle = boxGrad;
+                ctx.fillRect(x, y, w, h);
+                // 边框
+                ctx.fillStyle = '#8b6000';
+                ctx.fillRect(x, y, w, ps * 0.8);
+                ctx.fillRect(x, y + h - ps * 0.8, w, ps * 0.8);
+                ctx.fillRect(x, y, ps * 0.8, h);
+                ctx.fillRect(x + w - ps * 0.8, y, ps * 0.8, h);
+                // 锁扣
+                ctx.fillStyle = '#fff8dc';
+                ctx.fillRect(x + w * 0.35, y + h * 0.35, w * 0.3, h * 0.3);
+                ctx.fillStyle = '#ffd700';
+                ctx.fillRect(x + w * 0.38, y + h * 0.4, w * 0.24, h * 0.2);
+                // 星号标记
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(x + w * 0.45, y + h * 0.2, ps * 1.2, ps * 1.2);
+                ctx.fillRect(x + w * 0.35, y + h * 0.35, ps * 1, ps * 1);
+                ctx.fillRect(x + w * 0.55, y + h * 0.35, ps * 1, ps * 1);
+            }
+
+            function drawGrassBlock(x, y, blockWidth, blockHeight) {
+                const ps = player.pixelSize;
+                const bw = blockWidth;
+                const bh = blockHeight;
+                // 顶部草地
+                ctx.fillStyle = '#6db840';
+                ctx.fillRect(x, y, bw, bh * 0.3);
+                // 草地纹理
+                ctx.fillStyle = '#7cc850';
+                ctx.fillRect(x + bw * 0.2, y + bh * 0.05, bw * 0.25, bh * 0.15);
+                ctx.fillRect(x + bw * 0.55, y + bh * 0.08, bw * 0.2, bh * 0.12);
+                // 泥土部分
+                ctx.fillStyle = '#a08060';
+                ctx.fillRect(x, y + bh * 0.3, bw, bh * 0.7);
+                // 泥土纹理
+                ctx.fillStyle = '#8b6b4a';
+                ctx.fillRect(x + bw * 0.15, y + bh * 0.4, bw * 0.2, bh * 0.15);
+                ctx.fillRect(x + bw * 0.5, y + bh * 0.55, bw * 0.25, bh * 0.12);
+                ctx.fillRect(x + bw * 0.3, y + bh * 0.7, bw * 0.3, bh * 0.1);
+                // 侧面纹理点
+                ctx.fillStyle = '#b89570';
+                ctx.fillRect(x + bw * 0.1, y + bh * 0.35, bw * 0.08, bh * 0.08);
+                ctx.fillRect(x + bw * 0.7, y + bh * 0.5, bw * 0.08, bh * 0.08);
+                ctx.fillRect(x + bw * 0.4, y + bh * 0.65, bw * 0.06, bh * 0.06);
+                // 深色底部线
+                ctx.fillStyle = '#6b4f30';
+                ctx.fillRect(x, y + bh - bh * 0.08, bw, bh * 0.08);
+            }
+
+            function drawHeart(cx, cy, size, filled, isOrange = false) {
+                const s = size;
+                ctx.fillStyle = filled ? (isOrange ? '#ff8c00' : '#e84040') : '#444444';
+                // 像素心形：使用两个圆+三角形近似，但用像素方块
+                const heartShape = [
+                    [0, 1, 0, 1, 0],
+                    [1, 1, 1, 1, 1],
+                    [1, 1, 1, 1, 1],
+                    [0, 1, 1, 1, 0],
+                    [0, 0, 1, 0, 0],
+                ];
+                const cellSize = Math.floor(s / 5);
+                const startX = cx - Math.floor(heartShape[0].length * cellSize / 2);
+                const startY = cy - Math.floor(heartShape.length * cellSize / 2);
+                for (let r = 0; r < heartShape.length; r++) {
+                    for (let c = 0; c < heartShape[r].length; c++) {
+                        if (heartShape[r][c] === 1) {
+                            ctx.fillRect(startX + c * cellSize, startY + r * cellSize, cellSize, cellSize);
+                        }
+                    }
+                }
+                // 高光
+                if (filled) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                    ctx.fillRect(startX + cellSize, startY, cellSize * 1.2, cellSize * 0.6);
+                }
+            }
+
+            function drawCloud(cx, cy, size) {
+                const s = size;
+                ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                // 像素云朵
+                const blocks = [
+                    [1, 0], [2, 0], [3, 0], [4, 0],
+                    [0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [5, 1],
+                    [0, 2], [1, 2], [2, 2], [3, 2], [4, 2],
+                ];
+                const cell = Math.floor(s / 6);
+                for (let [bx, by] of blocks) {
+                    ctx.fillRect(cx + bx * cell, cy + by * cell, cell, cell);
+                }
+                // 阴影
+                ctx.fillStyle = 'rgba(200,210,220,0.5)';
+                for (let [bx, by] of blocks) {
+                    ctx.fillRect(cx + bx * cell + cell * 0.15, cy + by * cell + cell * 0.2, cell * 0.7, cell * 0.7);
+                }
+            }
+
+            function render() {
+                ctx.clearRect(0, 0, W, H);
+
+                // 应用屏幕震动偏移
+                const sx = shakeOffsetX;
+                const sy = shakeOffsetY;
+
+                ctx.save();
+                ctx.translate(sx, sy);
+
+                // ─── 天空渐变 ───
+                const skyGrad = ctx.createLinearGradient(0, 0, 0, groundY);
+                skyGrad.addColorStop(0, '#5c9ce6');
+                skyGrad.addColorStop(0.5, '#7ec8e3');
+                skyGrad.addColorStop(0.85, '#a8e6c8');
+                skyGrad.addColorStop(1, '#c8f0c8');
+                ctx.fillStyle = skyGrad;
+                ctx.fillRect(-20, -20, W + 40, groundY + 20);
+
+                // ─── 太阳 ───
+                const sunX = W * 0.78;
+                const sunY = H * 0.13;
+                const sunSize = player.pixelSize * 12;
+                const sunGrad = ctx.createRadialGradient(sunX, sunY, sunSize * 0.2, sunX, sunY, sunSize);
+                sunGrad.addColorStop(0, '#fffde0');
+                sunGrad.addColorStop(0.5, '#ffeb3b');
+                sunGrad.addColorStop(1, 'rgba(255,200,50,0)');
+                ctx.fillStyle = sunGrad;
+                ctx.fillRect(sunX - sunSize, sunY - sunSize, sunSize * 2, sunSize * 2);
+                // 像素太阳核心
+                ctx.fillStyle = '#fffde0';
+                const sunCore = sunSize * 0.35;
+                ctx.fillRect(sunX - sunCore / 2, sunY - sunCore / 2, sunCore, sunCore);
+
+                // ─── 云朵 ───
+                const cloudBaseSize = player.pixelSize * 10;
+                drawCloud(W * 0.15, H * 0.08, cloudBaseSize);
+                drawCloud(W * 0.45, H * 0.14, cloudBaseSize * 0.8);
+                drawCloud(W * 0.65, H * 0.06, cloudBaseSize * 0.9);
+                drawCloud(W * 0.35, H * 0.2, cloudBaseSize * 0.65);
+
+                // ─── 远处山丘（像素风格） ───
+                ctx.fillStyle = '#7ec880';
+                ctx.beginPath();
+                ctx.moveTo(-20, groundY);
+                for (let ix = -20; ix < W + 40; ix += player.pixelSize * 3) {
+                    const hillY = groundY - 40 - Math.sin(ix * 0.004) * 35 - Math.sin(ix * 0.009) * 25;
+                    ctx.lineTo(ix, hillY);
+                }
+                ctx.lineTo(W + 40, groundY);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = '#8fd490';
+                ctx.beginPath();
+                ctx.moveTo(-20, groundY);
+                for (let ix = -20; ix < W + 40; ix += player.pixelSize * 3) {
+                    const hillY = groundY - 20 - Math.sin(ix * 0.006 + 1) * 20 - Math.sin(ix * 0.011 + 2) * 18;
+                    ctx.lineTo(ix, hillY);
+                }
+                ctx.lineTo(W + 40, groundY);
+                ctx.closePath();
+                ctx.fill();
+
+                // ─── 地面草地 ───
+                const blockW = player.pixelSize * 6;
+                const blockH = player.pixelSize * 5;
+                const groundBlockCount = Math.ceil(W / blockW) + 3;
+                const scrollOffset = groundScrollOffset % blockW;
+                for (let i = -1; i < groundBlockCount; i++) {
+                    const bx = i * blockW - scrollOffset;
+                    drawGrassBlock(bx, groundY - blockH * 0.35, blockW, blockH);
+                }
+                // 地面下方填充
+                ctx.fillStyle = '#8b6b4a';
+                ctx.fillRect(-20, groundY + blockH * 0.55, W + 40, H - groundY + 20);
+                // 地面线
+                ctx.fillStyle = '#6b4f30';
+                ctx.fillRect(-20, groundY + blockH * 0.55, W + 40, player.pixelSize * 0.4);
+
+                // ─── 渲染超级箱子（在角色下方层） ───
+                for (let sb of superBoxes) {
+                    if (!sb.active) continue;
+                    drawSuperBox(sb.x, sb.y, sb.width, sb.height, sb.glowPhase);
+                }
+
+                // ─── 渲染道具 ───
+                for (let pu of powerUps) {
+                    if (!pu.active) continue;
+                    if (pu.type === 'phone') {
+                        drawPhone(pu.x, pu.y, pu.width, pu.height);
+                    } else {
+                        drawSyringe(pu.x, pu.y, pu.width, pu.height);
+                    }
+                    // 道具发光提示
+                    const puGlow = 0.3 + Math.sin(frameCount * 0.2) * 0.2;
+                    ctx.save();
+                    ctx.globalAlpha = puGlow;
+                    ctx.fillStyle = pu.type === 'phone' ? '#ffffff' : '#ff6688';
+                    ctx.fillRect(pu.x - 2, pu.y - 2, pu.width + 4, pu.height + 4);
+                    ctx.globalAlpha = 1;
+                    ctx.restore();
+                }
+
+                // ─── 渲染障碍物 ───
+                for (let obs of obstacles) {
+                    if (!obs.active) continue;
+                    if (obs.type === 'cactus') {
+                        drawCactus(obs.x, obs.y, obs.width, obs.height);
+                    } else {
+                        drawBarrel(obs.x, obs.y, obs.width, obs.height);
+                    }
+                }
+
+                // ─── 渲染角色 ───
+                const pd = player.isHIM ? player.himPixelData : player.pixelData;
+                // 角色阴影
+                ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                ctx.fillRect(player.x + player.pixelSize * 0.5, groundY - player.pixelSize * 0.3,
+                    player.width - player.pixelSize, player.pixelSize * 0.5);
+                // 绘制角色
+                drawPixelArt(player.x, player.y, pd, player.pixelSize);
+                // HIM粒子拖尾
+                if (player.isHIM && frameCount % 2 === 0) {
+                    spawnParticles(player.x + player.width / 2, player.y + player.height / 2,
+                        1, '#ffffff', 1, 0.3);
+                }
+
+                // ─── 渲染粒子 ───
+                for (let p of particles) {
+                    const alpha = Math.max(0, p.life / p.maxLife);
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = alpha;
+                    ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+                }
+                ctx.globalAlpha = 1;
+
+                ctx.restore(); // 恢复震动偏移
+
+                // ─── 顶部UI栏 ───
+                drawUI();
+
+                // ─── 速度效果提示 ───
+                if (speedEffectType && speedEffectTimer > 0) {
+                    const labelY = H * 0.22;
+                    ctx.save();
+                    ctx.font = `bold ${Math.max(10, player.pixelSize * 2.5)}px 'Press Start 2P', 'Courier New', monospace`;
+                    ctx.textAlign = 'center';
+                    const labelText = speedEffectType === 'slow' ? '🐢 减速中...' :
+                        speedEffectType === 'fast' ? '⚡ 加速中!' :
+                        '🌟 超级加速!!!';
+                    const labelColor = speedEffectType === 'slow' ? '#88ccff' :
+                        speedEffectType === 'fast' ? '#ffaa00' : '#ffd700';
+                    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                    ctx.fillRect(W / 2 - 120, labelY - 20, 240, 32);
+                    ctx.fillStyle = labelColor;
+                    ctx.fillText(labelText, W / 2, labelY + 2);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = `${Math.max(8, player.pixelSize * 1.6)}px 'Press Start 2P', 'Courier New', monospace`;
+                    ctx.fillText(`${speedEffectTimer.toFixed(1)}s`, W / 2, labelY + 18);
+                    ctx.restore();
+                }
+            }
+
+            function drawUI() {
+                const uiY = Math.max(8, H * 0.02);
+                const uiPadding = Math.max(10, W * 0.02);
+                const fontSize = Math.max(9, Math.min(15, player.pixelSize * 2.8));
+                const smallFontSize = Math.max(7, Math.min(11, player.pixelSize * 2));
+
+                // UI背景
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(0, 0, W, uiY + fontSize * 2.8 + 10);
+
+                ctx.font = `${fontSize}px 'Press Start 2P', 'Courier New', monospace`;
+                ctx.textBaseline = 'middle';
+
+                // 生命值心形
+                const heartStartX = uiPadding;
+                const heartY = uiY + fontSize * 1.2;
+                const heartSize = fontSize * 1.5;
+                for (let i = 0; i < player.maxLives; i++) {
+                    const hx = heartStartX + i * (heartSize + 4);
+                    const filled = i < player.lives;
+                    const isOrange = i >= 3;
+                    drawHeart(hx + heartSize / 2, heartY, heartSize, filled, isOrange);
+                }
+
+                // 得分
+                ctx.fillStyle = '#ffffff';
+                ctx.textAlign = 'center';
+                ctx.fillText(`🏃 ${score}m`, W / 2, heartY);
+
+                // 右侧信息
+                ctx.textAlign = 'right';
+                const rightX = W - uiPadding;
+                ctx.fillStyle = '#ffe0b0';
+                ctx.font = `${smallFontSize}px 'Press Start 2P', 'Courier New', monospace`;
+                const distToPowerUp = Math.max(0, nextPowerUpMeter - score);
+                const distToSuperBox = Math.max(0, nextSuperBoxMeter - score);
+                ctx.fillText(`📦道具:${distToPowerUp}m`, rightX, heartY - fontSize * 0.7);
+                ctx.fillText(`⭐宝箱:${distToSuperBox}m`, rightX, heartY + fontSize * 0.7);
+
+                // HIM状态指示器
+                if (player.isHIM) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.textAlign = 'center';
+                    ctx.font = `${smallFontSize}px 'Press Start 2P', 'Courier New', monospace`;
+                    const himAlpha = 0.7 + Math.sin(frameCount * 0.4) * 0.3;
+                    ctx.globalAlpha = himAlpha;
+                    ctx.fillText('👁 HIM模式 👁', W / 2, heartY + fontSize * 1.4);
+                    ctx.fillText(`${player.himTimer.toFixed(1)}s`, W / 2, heartY + fontSize * 2.4);
+                    ctx.globalAlpha = 1;
+                }
+                ctx.textBaseline = 'alphabetic';
+            }
+
+            // ──────────────────────────────────────
+            // 游戏循环
+            // ──────────────────────────────────────
+            let lastTime = performance.now();
+
+            function gameLoop(timestamp) {
+                let dt = (timestamp - lastTime) / 1000;
+                if (dt <= 0) dt = 0.016;
+                if (dt > 0.15) dt = 0.15; // 防止大帧跳跃
+                lastTime = timestamp;
+
+                update(dt);
+                render();
+
+                requestAnimationFrame(gameLoop);
+            }
+
+            // ──────────────────────────────────────
+            // 初始化
+            // ──────────────────────────────────────
+            function init() {
+                resizeCanvas();
+                player.pixelSize = Math.max(3, Math.min(7, Math.floor(scale * 2)));
+                player.width = 8 * player.pixelSize;
+                player.height = 10 * player.pixelSize;
+                player.x = Math.floor(W * 0.15);
+                player.y = groundY - player.height;
+                player.lives = 3;
+                player.maxLives = 3;
+                player.isHIM = false;
+                player.himTimer = 0;
+                player.vy = 0;
+                player.jumpCount = 0;
+                player.isOnGround = true;
+                gameState = STATE.PLAYING;
+                overlay.classList.remove('active');
+                obstacles = [];
+                powerUps = [];
+                superBoxes = [];
+                particles = [];
+                score = 0;
+                totalDistance = 0;
+                currentSpeed = baseSpeed;
+                speedMultiplier = 1;
+                speedEffectTimer = 0;
+                speedEffectType = null;
+                nextPowerUpMeter = 25;
+                nextSuperBoxMeter = 500;
+                screenShakeDuration = 0;
+                screenShakeIntensity = 0;
+                shakeOffsetX = 0;
+                shakeOffsetY = 0;
+                groundScrollOffset = 0;
+                obstacleSpawnTimer = 0;
+                obstacleSpawnInterval = 300 + Math.random() * 350;
+                frameCount = 0;
+                lastTime = performance.now();
+                // 初始生成一些障碍物
+                for (let i = 0; i < 3; i++) {
+                    const type = Math.random() < 0.55 ? 'cactus' : 'barrel';
+                    const w = type === 'cactus' ? player.pixelSize * 5 : player.pixelSize * 7;
+                    const h = type === 'cactus' ? player.pixelSize * 9 : player.pixelSize * 6;
+                    obstacles.push({
+                        type: type,
+                        x: W + 80 + i * 350 + Math.random() * 200,
+                        y: groundY - h,
+                        width: w,
+                        height: h,
+                        active: true,
+                    });
+                }
+            }
+
+            init();
+            requestAnimationFrame(gameLoop);
+
+            // ──────────────────────────────────────
+            // 窗口大小调整
+            // ──────────────────────────────────────
+            window.addEventListener('resize', () => {
+                const oldGroundY = groundY;
+                resizeCanvas();
+                player.pixelSize = Math.max(3, Math.min(7, Math.floor(scale * 2)));
+                player.width = 8 * player.pixelSize;
+                player.height = 10 * player.pixelSize;
+                player.x = Math.floor(W * 0.15);
+                // 调整玩家Y位置
+                const groundDelta = groundY - oldGroundY;
+                player.y += groundDelta;
+                if (player.isOnGround) {
+                    player.y = groundY - player.height;
+                }
+                player.y = Math.min(player.y, groundY - player.height);
+                // 调整障碍物
+                for (let obs of obstacles) {
+                    obs.y = groundY - obs.height;
+                }
+                for (let pu of powerUps) {
+                    pu.y = groundY - pu.height - player.pixelSize * 2;
+                }
+                for (let sb of superBoxes) {
+                    sb.y = groundY - sb.height - player.pixelSize * 1;
+                }
+            });
+
+            console.log('🌾 块块快跑：草原风暴 - 准备就绪！');
+            console.log('  按空格键或点击屏幕跳跃（支持二段跳）');
+            console.log('  躲避仙人掌（扣血），触碰木桶触发速度变化');
+            console.log('  收集手机📱变HIM形态，针管💉回血');
+            console.log('  金色宝箱⭐每500米出现，100倍超级加速+1000分！');
+        })();
+    </script>
+</body>
+</html>

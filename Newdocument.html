@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>像素风排序算法可视化</title>
+    <style>
+        /* 全局像素风样式重置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Press Start 2P", "Microsoft YaHei", monospace;
+        }
+
+        body {
+            background-color: #1a1a2e;
+            color: #ffffff;
+            min-height: 100vh;
+            padding: 20px;
+            image-rendering: pixelated; /* 像素风核心 */
+        }
+
+        /* 像素风容器 */
+        .pixel-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            border: 4px solid #00ffcc;
+            background-color: #16213e;
+            padding: 20px;
+            box-shadow: 0 0 0 4px #0f3460, 0 0 20px #00ffcc;
+        }
+
+        /* 标题样式 */
+        .pixel-title {
+            text-align: center;
+            font-size: 24px;
+            color: #00ffcc;
+            text-shadow: 3px 3px 0 #0f3460;
+            margin-bottom: 20px;
+            letter-spacing: 2px;
+        }
+
+        /* 控制面板 */
+        .control-panel {
+            border: 3px solid #e94560;
+            padding: 15px;
+            margin-bottom: 20px;
+            background-color: #0f3460;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 像素风输入框 */
+        .pixel-input {
+            background-color: #1a1a2e;
+            border: 3px solid #00ffcc;
+            color: #ffffff;
+            padding: 8px 12px;
+            font-size: 14px;
+            width: 180px;
+            outline: none;
+        }
+
+        .pixel-input:focus {
+            border-color: #e94560;
+            box-shadow: 0 0 0 2px #00ffcc;
+        }
+
+        /* 像素风按钮 */
+        .pixel-btn {
+            background-color: #e94560;
+            border: 3px solid #ffffff;
+            color: #ffffff;
+            padding: 8px 15px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.1s;
+            image-rendering: pixelated;
+        }
+
+        .pixel-btn:hover {
+            background-color: #ff6b81;
+            transform: translate(-2px, -2px);
+            box-shadow: 2px 2px 0 #ffffff;
+        }
+
+        .pixel-btn:active {
+            transform: translate(0, 0);
+            box-shadow: none;
+        }
+
+        /* 排序算法选择框 */
+        .pixel-select {
+            background-color: #1a1a2e;
+            border: 3px solid #00ffcc;
+            color: #ffffff;
+            padding: 8px;
+            font-size: 12px;
+            outline: none;
+        }
+
+        /* 可视化区域 */
+        .visual-area {
+            border: 3px solid #00ffcc;
+            height: 500px;
+            background-color: #0f3460;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding: 10px;
+            gap: 2px; /* 柱状图间隙 */
+        }
+
+        /* 排序柱状图 */
+        .bar {
+            background-color: #00ffcc;
+            flex: 1;
+            transition: height 0.1s ease, background-color 0.1s ease;
+            border: 2px solid #ffffff;
+        }
+
+        /* 排序状态颜色 */
+        .bar-comparing {
+            background-color: #e94560 !important; /* 比较中 */
+        }
+
+        .bar-sorted {
+            background-color: #feca57 !important; /* 已排序 */
+        }
+
+        /* 信息面板 */
+        .info-panel {
+            margin-top: 15px;
+            border: 3px solid #e94560;
+            padding: 10px;
+            background-color: #0f3460;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        /* 提示文字 */
+        .tip-text {
+            text-align: center;
+            margin: 10px 0;
+            color: #feca57;
+            font-size: 12px;
+        }
+
+        /* 引入像素字体 */
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+    </style>
+</head>
+<body>
+    <div class="pixel-container">
+        <h1 class="pixel-title">🎮 PIXEL SORT VISUAL 🎮</h1>
+        
+        <div class="control-panel">
+            <input type="number" id="maxNum" class="pixel-input" placeholder="最大数字(最小=1)" min="2" value="100">
+            <button class="pixel-btn" id="generateBtn">生成数组</button>
+            <select id="sortSelect" class="pixel-select">
+                <option value="bubble">冒泡排序 Bubble</option>
+                <option value="selection">选择排序 Selection</option>
+                <option value="insertion">插入排序 Insertion</option>
+                <option value="shell">希尔排序 Shell</option>
+                <option value="merge">归并排序 Merge</option>
+                <option value="quick">快速排序 Quick</option>
+                <option value="heap">堆排序 Heap</option>
+                <option value="counting">计数排序 Counting</option>
+                <option value="bucket">桶排序 Bucket</option>
+                <option value="radix">基数排序 Radix</option>
+            </select>
+            <button class="pixel-btn" id="startBtn">开始排序</button>
+            <button class="pixel-btn" id="resetBtn">重置</button>
+        </div>
+
+        <p class="tip-text">最小数字固定为1，输入最大数字后点击生成数组 → 选择算法 → 开始排序</p>
+
+        <div class="visual-area" id="visualArea"></div>
+
+        <div class="info-panel">
+            <div>数组长度: <span id="arrLen">0</span></div>
+            <div>数值范围: 1 ~ <span id="numRange">0</span></div>
+            <div>排序耗时: <span id="sortTime">0</span> ms</div>
+            <div>当前算法: <span id="currAlgo">未选择</span></div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let arr = [];
+        let originalArr = [];
+        const visualArea = document.getElementById('visualArea');
+        const maxNumInput = document.getElementById('maxNum');
+        const arrLenSpan = document.getElementById('arrLen');
+        const numRangeSpan = document.getElementById('numRange');
+        const sortTimeSpan = document.getElementById('sortTime');
+        const currAlgoSpan = document.getElementById('currAlgo');
+        let isSorting = false;
+
+        // 初始化：生成默认数组
+        window.onload = () => {
+            generateRandomArray();
+        };
+
+        // 生成随机数组（最小1，最大自定义）
+        function generateRandomArray() {
+            if (isSorting) return;
+            const max = parseInt(maxNumInput.value) || 100;
+            if (max < 2) {
+                alert('最大数字必须大于1！');
+                maxNumInput.value = 100;
+                return;
+            }
+            // 固定数组长度50（可视化效果最佳）
+            const length = 50;
+            arr = [];
+            for (let i = 0; i < length; i++) {
+                arr.push(Math.floor(Math.random() * max) + 1);
+            }
+            originalArr = [...arr];
+            renderBars();
+            arrLenSpan.textContent = length;
+            numRangeSpan.textContent = max;
+            sortTimeSpan.textContent = 0;
+            currAlgoSpan.textContent = '未排序';
+        }
+
+        // 渲染柱状图
+        function renderBars(comparingIndices = [], sortedIndices = []) {
+            visualArea.innerHTML = '';
+            const maxVal = Math.max(...arr);
+            arr.forEach((val, index) => {
+                const bar = document.createElement('div');
+                bar.className = 'bar';
+                // 计算高度比例
+                const height = (val / maxVal) * 95 + '%';
+                bar.style.height = height;
+
+                // 状态染色
+                if (sortedIndices.includes(index)) {
+                    bar.classList.add('bar-sorted');
+                } else if (comparingIndices.includes(index)) {
+                    bar.classList.add('bar-comparing');
+                }
+
+                visualArea.appendChild(bar);
+            });
+        }
+
+        // 睡眠函数（控制动画速度）
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // 重置数组
+        function resetArray() {
+            if (isSorting) return;
+            arr = [...originalArr];
+            renderBars();
+            sortTimeSpan.textContent = 0;
+            currAlgoSpan.textContent = '已重置';
+        }
+
+        // -------------------------- 十大排序算法实现 --------------------------
+        // 1. 冒泡排序
+        async function bubbleSort() {
+            const n = arr.length;
+            for (let i = 0; i < n - 1; i++) {
+                for (let j = 0; j < n - i - 1; j++) {
+                    renderBars([j, j + 1]);
+                    await sleep(20);
+                    if (arr[j] > arr[j + 1]) {
+                        [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];
+                    }
+                }
+                renderBars([], [n - i - 1]);
+            }
+            renderBars([], Array.from({length: n}, (_, i) => i));
+        }
+
+        // 2. 选择排序
+        async function selectionSort() {
+            const n = arr.length;
+            for (let i = 0; i < n - 1; i++) {
+                let minIdx = i;
+                for (let j = i + 1; j < n; j++) {
+                    renderBars([minIdx, j]);
+                    await sleep(30);
+                    if (arr[j] < arr[minIdx]) {
+                        minIdx = j;
+                    }
+                }
+                [arr[i], arr[minIdx]] = [arr[minIdx], arr[i]];
+                renderBars([], [i]);
+            }
+            renderBars([], Array.from({length: n}, (_, i) => i));
+        }
+
+        // 3. 插入排序
+        async function insertionSort() {
+            const n = arr.length;
+            for (let i = 1; i < n; i++) {
+                let key = arr[i];
+                let j = i - 1;
+                renderBars([i]);
+                await sleep(30);
+                while (j >= 0 && arr[j] > key) {
+                    arr[j + 1] = arr[j];
+                    j--;
+                    renderBars([j + 1]);
+                    await sleep(20);
+                }
+                arr[j + 1] = key;
+            }
+            renderBars([], Array.from({length: n}, (_, i) => i));
+        }
+
+        // 4. 希尔排序
+        async function shellSort() {
+            const n = arr.length;
+            let gap = Math.floor(n / 2);
+            while (gap > 0) {
+                for (let i = gap; i < n; i++) {
+                    let temp = arr[i];
+                    let j = i;
+                    renderBars([i]);
+                    await sleep(25);
+                    while (j >= gap && arr[j - gap] > temp) {
+                        arr[j] = arr[j - gap];
+                        j -= gap;
+                        renderBars([j]);
+                        await sleep(20);
+                    }
+                    arr[j] = temp;
+                }
+                gap = Math.floor(gap / 2);
+            }
+            renderBars([], Array.from({length: n}, (_, i) => i));
+        }
+
+        // 5. 归并排序
+        async function mergeSort() {
+            await mergeSortHelper(0, arr.length - 1);
+            renderBars([], Array.from({length: arr.length}, (_, i) => i));
+        }
+
+        async function mergeSortHelper(left, right) {
+            if (left >= right) return;
+            const mid = Math.floor((left + right) / 2);
+            await mergeSortHelper(left, mid);
+            await mergeSortHelper(mid + 1, right);
+            await merge(left, mid, right);
+        }
+
+        async function merge(left, mid, right) {
+            const temp = [];
+            let i = left, j = mid + 1;
+            while (i <= mid && j <= right) {
+                renderBars([i, j]);
+                await sleep(40);
+                if (arr[i] <= arr[j]) {
+                    temp.push(arr[i++]);
+                } else {
+                    temp.push(arr[j++]);
+                }
+            }
+            while (i <= mid) temp.push(arr[i++]);
+            while (j <= right) temp.push(arr[j++]);
+            for (let k = 0; k < temp.length; k++) {
+                arr[left + k] = temp[k];
+                renderBars([left + k]);
+                await sleep(20);
+            }
+        }
+
+        // 6. 快速排序
+        async function quickSort() {
+            await quickSortHelper(0, arr.length - 1);
+            renderBars([], Array.from({length: arr.length}, (_, i) => i));
+        }
+
+        async function quickSortHelper(low, high) {
+            if (low >= high) return;
+            const pivotIdx = await partition(low, high);
+            await quickSortHelper(low, pivotIdx - 1);
+            await quickSortHelper(pivotIdx + 1, high);
+        }
+
+        async function partition(low, high) {
+            const pivot = arr[high];
+            let i = low - 1;
+            for (let j = low; j < high; j++) {
+                renderBars([j, high]);
+                await sleep(30);
+                if (arr[j] < pivot) {
+                    i++;
+                    [arr[i], arr[j]] = [arr[j], arr[i]];
+                }
+            }
+            [arr[i + 1], arr[high]] = [arr[high], arr[i + 1]];
+            return i + 1;
+        }
+
+        // 7. 堆排序
+        async function heapSort() {
+            const n = arr.length;
+            for (let i = Math.floor(n / 2) - 1; i >= 0; i--) {
+                await heapify(n, i);
+            }
+            for (let i = n - 1; i > 0; i--) {
+                [arr[0], arr[i]] = [arr[i], arr[0]];
+                renderBars([0, i], [i]);
+                await sleep(40);
+                await heapify(i, 0);
+            }
+            renderBars([], Array.from({length: n}, (_, i) => i));
+        }
+
+        async function heapify(n, i) {
+            let largest = i;
+            const left = 2 * i + 1;
+            const right = 2 * i + 2;
+            if (left < n && arr[left] > arr[largest]) largest = left;
+            if (right < n && arr[right] > arr[largest]) largest = right;
+            if (largest !== i) {
+                [arr[i], arr[largest]] = [arr[largest], arr[i]];
+                renderBars([i, largest]);
+                await sleep(30);
+                await heapify(n, largest);
+            }
+        }
+
+        // 8. 计数排序
+        async function countingSort() {
+            const max = Math.max(...arr);
+            const count = new Array(max + 1).fill(0);
+            const output = new Array(arr.length);
+            for (let num of arr) count[num]++;
+            for (let i = 1; i <= max; i++) count[i] += count[i - 1];
+            for (let i = arr.length - 1; i >= 0; i--) {
+                output[count[arr[i]] - 1] = arr[i];
+                count[arr[i]]--;
+            }
+            for (let i = 0; i < arr.length; i++) {
+                arr[i] = output[i];
+                renderBars([i], Array.from({length: i + 1}, (_, j) => j));
+                await sleep(30);
+            }
+        }
+
+        // 9. 桶排序
+        async function bucketSort() {
+            const max = Math.max(...arr);
+            const min = 1;
+            const bucketNum = 10;
+            const buckets = Array.from({length: bucketNum}, () => []);
+            for (let num of arr) {
+                const idx = Math.floor((num - min) * bucketNum / (max - min + 1));
+                buckets[idx].push(num);
+            }
+            let index = 0;
+            for (let bucket of buckets) {
+                bucket.sort((a, b) => a - b);
+                for (let num of bucket) {
+                    arr[index++] = num;
+                    renderBars([index - 1], Array.from({length: index}, (_, i) => i));
+                    await sleep(30);
+                }
+            }
+        }
+
+        // 10. 基数排序
+        async function radixSort() {
+            const max = Math.max(...arr);
+            for (let exp = 1; Math.floor(max / exp) > 0; exp *= 10) {
+                await countingSortByDigit(exp);
+            }
+            renderBars([], Array.from({length: arr.length}, (_, i) => i));
+        }
+
+        async function countingSortByDigit(exp) {
+            const n = arr.length;
+            const output = new Array(n).fill(0);
+            const count = new Array(10).fill(0);
+            for (let i = 0; i < n; i++) count[Math.floor(arr[i] / exp) % 10]++;
+            for (let i = 1; i < 10; i++) count[i] += count[i - 1];
+            for (let i = n - 1; i >= 0; i--) {
+                output[count[Math.floor(arr[i] / exp) % 10] - 1] = arr[i];
+                count[Math.floor(arr[i] / exp) % 10]--;
+            }
+            for (let i = 0; i < n; i++) {
+                arr[i] = output[i];
+                renderBars([i]);
+                await sleep(25);
+            }
+        }
+
+        // -------------------------- 算法映射 --------------------------
+        const sortAlgorithms = {
+            bubble: bubbleSort,
+            selection: selectionSort,
+            insertion: insertionSort,
+            shell: shellSort,
+            merge: mergeSort,
+            quick: quickSort,
+            heap: heapSort,
+            counting: countingSort,
+            bucket: bucketSort,
+            radix: radixSort
+        };
+
+        const algoNames = {
+            bubble: "冒泡排序",
+            selection: "选择排序",
+            insertion: "插入排序",
+            shell: "希尔排序",
+            merge: "归并排序",
+            quick: "快速排序",
+            heap: "堆排序",
+            counting: "计数排序",
+            bucket: "桶排序",
+            radix: "基数排序"
+        };
+
+        // 开始排序
+        async function startSort() {
+            if (isSorting) return;
+            isSorting = true;
+            const sortType = document.getElementById('sortSelect').value;
+            const sortFunc = sortAlgorithms[sortType];
+            currAlgoSpan.textContent = algoNames[sortType];
+            
+            const startTime = performance.now();
+            await sortFunc();
+            const endTime = performance.now();
+            
+            sortTimeSpan.textContent = Math.round(endTime - startTime);
+            isSorting = false;
+        }
+
+        // 绑定按钮事件
+        document.getElementById('generateBtn').addEventListener('click', generateRandomArray);
+        document.getElementById('startBtn').addEventListener('click', startSort);
+        document.getElementById('resetBtn').addEventListener('click', resetArray);
+    </script>
+</body>
+</html>
